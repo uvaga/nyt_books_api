@@ -14,10 +14,21 @@ class NYTBestSellersHistoryApiRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'author' => 'nullable|string',
-            'isbn' => ['nullable', 'string', 'regex:/^(\d{10}|\d{13})(;\d{10}|\d{13})*$/'],
-            'title' => 'nullable|string',
-            'offset' => 'nullable|integer|min:0',
+            'author' => ['sometimes', 'string', 'max:255'],
+            'isbn' => ['sometimes' , 'array'],
+            'isbn.*' => ['sometimes', 'string', 'regex:/^(\d{10}|\d{13})$/'],
+            'title' => ['sometimes', 'string', 'max:400'],
+            'offset' => ['sometimes', 'integer', 'min:0', 'multiple_of:20'],
         ];
     }
+
+    public function prepareForValidation(): void
+    {
+        if ($this->has('isbn')) {
+            $this->merge([
+                'isbn' => explode(';', $this->input('isbn')),
+            ]);
+        }
+    }
+
 }

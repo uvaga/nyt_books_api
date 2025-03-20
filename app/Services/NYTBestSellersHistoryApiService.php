@@ -2,8 +2,7 @@
 
 namespace App\Services;
 
-use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\{Http, Cache};
 
 class NYTBestSellersHistoryApiService
 {
@@ -24,19 +23,29 @@ class NYTBestSellersHistoryApiService
         return Cache::store(config('cache.default'))
             ->remember($cacheKey, now()->addMinutes($this->apiDataCacheTtl),
                 function () use ($params) {
-                    $query = array_merge($params, ['api-key' => $this->apiKey]);
-                    $response = Http::get($this->apiUrl, $query);
+                    $response = Http::retry(5, 500)->get($this->apiUrl, $this->prepareRequestParams($params));
 
-                    if (!$response->successful()) {
+                    if ($response->serverError()) {
                         throw new \Exception('Failed to fetch data from NYT Books API: ' . $response->body());
                     }
-
-                    return $response->json()['results'] ?? [];
+                    $json = $response->json();
+                    return [
+                        'results' => $json['results'] ?? [],
+                        'errors' => $json['errors'] ?? [],
+                    ];
                 });
     }
 
     protected function generateCacheKey(array $params): string
     {
         return 'nyt_bestsellers_' . md5(json_encode($params));
+    }
+
+    protected function prepareRequestParams(array $params): array
+    {
+        if (isset($params['isbn']) && is_array($params['isbn'])) {
+            $params['isbn'] = implode(';', $params['isbn']);
+        }
+        return array_merge($params, ['api-key' => $this->apiKey]);
     }
 }
